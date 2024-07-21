@@ -1,39 +1,68 @@
-pub fn permute<T>(data: &[T]) -> impl Iterator<Item = Vec<&T>> {
-    Permutator::new(data)
+pub fn permute<'a, T>(data: &'a [T]) -> impl Iterator<Item = Vec<&T>> {
+    Permutator::<'a, T, Uncloned>::new(data)
 }
 
-pub fn permute_cloned<T: Clone>(
-    data: &[T],
-) -> impl Iterator<Item = Vec<T>> + '_ {
-    PermutatorCloned::new(data)
+pub fn permute_cloned<'a, T: Clone>(
+    data: &'a [T],
+) -> impl Iterator<Item = Vec<T>> + 'a {
+    Permutator::<'a, T, Cloned>::new(data)
 }
 
-struct Permutator<'a, T> {
+trait GetValue<'a, T> {
+    type Item;
+    fn get_value(x: &'a T) -> Self::Item;
+}
+
+struct Uncloned;
+
+impl<'a, T: 'a> GetValue<'a, T> for Uncloned {
+    type Item = &'a T;
+    fn get_value(x: &'a T) -> Self::Item {
+        x
+    }
+}
+
+struct Cloned;
+
+impl<'a, T: 'a + Clone> GetValue<'a, T> for Cloned {
+    type Item = T;
+    fn get_value(x: &'a T) -> Self::Item {
+        x.clone()
+    }
+}
+
+struct Permutator<'a, T, GV: GetValue<'a, T>> {
     data: &'a [T],
     indices: Vec<usize>,
     done: bool,
+    m: std::marker::PhantomData<GV>,
 }
 
-impl<'a, T> Permutator<'a, T> {
+impl<'a, T, GV: GetValue<'a, T>> Permutator<'a, T, GV> {
     fn new(data: &'a [T]) -> Self {
         let len = data.len();
         Self {
             data,
             indices: (0..len).collect(),
             done: false,
+            m: std::marker::PhantomData,
         }
     }
 }
 
-impl<'a, T> Iterator for Permutator<'a, T> {
-    type Item = Vec<&'a T>;
+impl<'a, T, GV: GetValue<'a, T>> Iterator for Permutator<'a, T, GV> {
+    type Item = Vec<GV::Item>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
             return None;
         }
 
-        let result = self.indices.iter().map(|&i| &self.data[i]).collect();
+        let result = self
+            .indices
+            .iter()
+            .map(|&i| GV::get_value(&self.data[i]))
+            .collect();
         let mut i = self.indices.len() - 1;
         while i > 0 && self.indices[i - 1] >= self.indices[i] {
             i -= 1;
@@ -52,28 +81,6 @@ impl<'a, T> Iterator for Permutator<'a, T> {
         }
 
         Some(result)
-    }
-}
-
-struct PermutatorCloned<'a, T: Clone> {
-    permutator: Permutator<'a, T>,
-}
-
-impl<'a, T: Clone> PermutatorCloned<'a, T> {
-    fn new(data: &'a [T]) -> Self {
-        Self {
-            permutator: Permutator::new(data),
-        }
-    }
-}
-
-impl<'a, T: Clone> Iterator for PermutatorCloned<'a, T> {
-    type Item = Vec<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.permutator
-            .next()
-            .map(|v| v.into_iter().cloned().collect::<Vec<_>>())
     }
 }
 
