@@ -1,12 +1,15 @@
 pub fn permute<'a, T>(data: &'a [T]) -> impl Iterator<Item = Vec<&T>> {
-    Permutator::<'a, T, Uncloned>::new(data)
+    PermutatorUncloned::new(data)
 }
 
 pub fn permute_cloned<'a, T: Clone>(
     data: &'a [T],
 ) -> impl Iterator<Item = Vec<T>> + 'a {
-    Permutator::<'a, T, Cloned>::new(data)
+    PermutatorCloned::new(data)
 }
+
+type PermutatorUncloned<'a, T> = Permutator<'a, T, Uncloned>;
+type PermutatorCloned<'a, T> = Permutator<'a, T, Cloned>;
 
 trait GetValue<'a, T> {
     type Item;
@@ -89,7 +92,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn test_permute() {
+        let v = vec!["1", "2", "3"];
+        let perms = permute(&v).collect::<Vec<_>>();
+        assert_eq!(perms.len(), 6);
+        assert_eq!(perms[0], vec![&"1", &"2", &"3"]);
+        assert_eq!(perms[1], vec![&"1", &"3", &"2"]);
+        assert_eq!(perms[2], vec![&"2", &"1", &"3"]);
+        assert_eq!(perms[3], vec![&"2", &"3", &"1"]);
+        assert_eq!(perms[4], vec![&"3", &"1", &"2"]);
+        assert_eq!(perms[5], vec![&"3", &"2", &"1"]);
+    }
+
+    #[test]
+    fn test_permute_cloned() {
         let v = vec![1, 2, 3];
         let perms = permute_cloned(&v).collect::<Vec<_>>();
         assert_eq!(perms.len(), 6);
