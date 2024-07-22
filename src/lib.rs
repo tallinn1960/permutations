@@ -1,34 +1,56 @@
+use core::fmt::Debug;
+
 // by quinedot, Rust community forum
-pub fn permute<'a, U, T, F: 'a>(data: &'a [T], accessor: F) -> impl Iterator<Item = Vec<U>> + 'a
+pub fn permute<'a, U, T, F>(
+    data: &'a [T],
+    accessor: F,
+) -> Permutator<'a, T, F, U>
 where
-    F: FnMut(&'a T) -> U,
+    F: FnMut(&'a T) -> U + 'a,
 {
     Permutator::new(data, accessor)
 }
 
-struct Permutator<'a, T, F> {
+#[derive(Clone)]
+pub struct Permutator<'a, T, F, U>
+where
+    F: FnMut(&'a T) -> U + 'a,
+{
     data: &'a [T],
     indices: Vec<usize>,
     done: bool,
     accessor: F,
 }
 
-impl<'a, T, F> Permutator<'a, T, F> {
-    fn new<U>(data: &'a [T], accessor: F) -> Self
-    where
-        F: FnMut(&'a T) -> U,
-    {
+impl<'a, T: Debug, F, U> Debug for Permutator<'a, T, F, U>
+where
+    F: FnMut(&'a T) -> U + 'a,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Permutator")
+            .field("data", &self.data)
+            .field("indices", &self.indices)
+            .field("done", &self.done)
+            .finish()
+    }
+}
+
+impl<'a, T, F, U> Permutator<'a, T, F, U>
+where
+    F: FnMut(&'a T) -> U + 'a,
+{
+    fn new(data: &'a [T], accessor: F) -> Self {
         let len = data.len();
         Self {
             data,
             indices: (0..len).collect(),
             done: false,
-            accessor
+            accessor,
         }
     }
 }
 
-impl<'a, T, F: FnMut(&'a T) -> U, U> Iterator for Permutator<'a, T, F> {
+impl<'a, T, F: FnMut(&'a T) -> U, U> Iterator for Permutator<'a, T, F, U> {
     type Item = Vec<U>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
@@ -41,7 +63,7 @@ impl<'a, T, F: FnMut(&'a T) -> U, U> Iterator for Permutator<'a, T, F> {
             .copied()
             .map(|idx| (self.accessor)(&self.data[idx]))
             .collect();
-            
+
         let mut i = self.indices.len() - 1;
         while i > 0 && self.indices[i - 1] >= self.indices[i] {
             i -= 1;
@@ -91,5 +113,12 @@ mod tests {
         assert_eq!(perms[3], vec![2, 3, 1]);
         assert_eq!(perms[4], vec![3, 1, 2]);
         assert_eq!(perms[5], vec![3, 2, 1]);
+    }
+
+    #[test]
+    fn test_traits() {
+        let v = permute(&[1, 2, 3], std::convert::identity);
+        let _ = v.clone();
+        let _ = format!("{:?}", v);
     }
 }
