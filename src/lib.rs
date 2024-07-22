@@ -1,61 +1,35 @@
-pub fn permute<'a, T>(data: &'a [T]) -> impl Iterator<Item = Vec<&T>> {
-    PermutatorUncloned::new(data)
+// by quinedot, Rust community forum
+pub fn permute<'a, U, T, F: 'a>(data: &'a [T], accessor: F) -> impl Iterator<Item = Vec<U>> + 'a
+where
+    F: FnMut(&'a T) -> U,
+{
+    Permutator::new(data, accessor)
 }
 
-pub fn permute_cloned<'a, T: Clone>(
-    data: &'a [T],
-) -> impl Iterator<Item = Vec<T>> + 'a {
-    PermutatorCloned::new(data)
-}
-
-type PermutatorUncloned<'a, T> = Permutator<'a, T, Uncloned>;
-type PermutatorCloned<'a, T> = Permutator<'a, T, Cloned>;
-
-trait GetValue<'a, T> {
-    type Item;
-    fn get_value(x: &'a T) -> Self::Item;
-}
-
-struct Uncloned;
-
-impl<'a, T: 'a> GetValue<'a, T> for Uncloned {
-    type Item = &'a T;
-    fn get_value(x: &'a T) -> Self::Item {
-        x
-    }
-}
-
-struct Cloned;
-
-impl<'a, T: 'a + Clone> GetValue<'a, T> for Cloned {
-    type Item = T;
-    fn get_value(x: &'a T) -> Self::Item {
-        x.clone()
-    }
-}
-
-struct Permutator<'a, T, GV: GetValue<'a, T>> {
+struct Permutator<'a, T, F> {
     data: &'a [T],
     indices: Vec<usize>,
     done: bool,
-    m: std::marker::PhantomData<GV>,
+    accessor: F,
 }
 
-impl<'a, T, GV: GetValue<'a, T>> Permutator<'a, T, GV> {
-    fn new(data: &'a [T]) -> Self {
+impl<'a, T, F> Permutator<'a, T, F> {
+    fn new<U>(data: &'a [T], accessor: F) -> Self
+    where
+        F: FnMut(&'a T) -> U,
+    {
         let len = data.len();
         Self {
             data,
             indices: (0..len).collect(),
             done: false,
-            m: std::marker::PhantomData,
+            accessor
         }
     }
 }
 
-impl<'a, T, GV: GetValue<'a, T>> Iterator for Permutator<'a, T, GV> {
-    type Item = Vec<GV::Item>;
-
+impl<'a, T, F: FnMut(&'a T) -> U, U> Iterator for Permutator<'a, T, F> {
+    type Item = Vec<U>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
             return None;
@@ -64,8 +38,10 @@ impl<'a, T, GV: GetValue<'a, T>> Iterator for Permutator<'a, T, GV> {
         let result = self
             .indices
             .iter()
-            .map(|&i| GV::get_value(&self.data[i]))
+            .copied()
+            .map(|idx| (self.accessor)(&self.data[idx]))
             .collect();
+            
         let mut i = self.indices.len() - 1;
         while i > 0 && self.indices[i - 1] >= self.indices[i] {
             i -= 1;
@@ -94,7 +70,7 @@ mod tests {
     #[test]
     fn test_permute() {
         let v = vec!["1", "2", "3"];
-        let perms = permute(&v).collect::<Vec<_>>();
+        let perms = permute(&v, std::convert::identity).collect::<Vec<_>>();
         assert_eq!(perms.len(), 6);
         assert_eq!(perms[0], vec![&"1", &"2", &"3"]);
         assert_eq!(perms[1], vec![&"1", &"3", &"2"]);
@@ -107,7 +83,7 @@ mod tests {
     #[test]
     fn test_permute_cloned() {
         let v = vec![1, 2, 3];
-        let perms = permute_cloned(&v).collect::<Vec<_>>();
+        let perms = permute(&v, Clone::clone).collect::<Vec<_>>();
         assert_eq!(perms.len(), 6);
         assert_eq!(perms[0], vec![1, 2, 3]);
         assert_eq!(perms[1], vec![1, 3, 2]);
